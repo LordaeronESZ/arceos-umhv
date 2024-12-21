@@ -438,3 +438,38 @@ SeaBIOS 的入口地址为 `0xe05b`（`f000:e05b`）。
 - 既然 OS 内核是由 BIOS/Bootloader 来启动，那为什么要在配置文件：`nimbos-x86_64.toml` 中指定内核的加载地址 `kernel_load_addr`？
 - 要让 arceos-vmm 运行 SeaBIOS，可以直接将配置文件中的 `bios_load_addr` 设置为 SeaBIOS 的入口地址：`f000:e05b`（需要设置寄存器 `cs` 和 `ip`）？
 - SeaBIOS 是如何加载指定的 OS 内核的？对应的内核地址设置在什么地方？
+
+### 10 号
+
+无进展。
+
+### 11 日
+
+#### SeaBIOS 启动过程
+
+1. 第一条指令，`romlayout.S::reset_vector`，跳转到 `entry_post` 的位置。
+2. 执行 `entry_post`，正常启动状态时，通过 `ENTRY_INTO32` 将机器从实模式切换到保护模式，再调用 `handle_post` 函数。
+3. 在 `handle_post` 函数中，执行各种初始化工作，最终回到保护模式，调用 INT19 中断，进入 Boot 状态。
+4. Boot 状态下，从 `handle_19` 开始，在 `do_boot` 中，根据引导设备的不同执行对应的引导函数。
+5. 通过 `call_boot_entry`，转移到 bootloader，进行真正的操作系统加载工作。
+
+#### 尝试移植 SeaBIOS
+
+直接将 nimbos 替换为编译出来的 SeaBIOS，运行结果如下：
+
+![image-20241211214502785](assets/image-20241211214502785.png)
+
+### 12 日
+
+#### Nimbos 启动
+
+Nimbos 协议通过 multiboot 协议启动，首先由 BIOS/bootloader 启动，将系统设置为协议制定的状态，再开始运行 Nimbos 的启动代码，完成剩余部分的启动。在进入 OS 前，要求 BIOS 或 bootloader 设置好的系统状态为：
+
+* `CR0.PE = 1` (保护模式)
+* GDT 有效
+* `CS`、`DS`、`ES`、`FS`、`GS`、`SS` 这些段寄存器有效
+* `EAX` = `0x2BADB002` (magic number)
+* `EBX` = Multiboot information address (目前不支持)
+* `ESP` 有效
+* 关中断
+
